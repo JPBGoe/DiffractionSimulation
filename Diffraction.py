@@ -1,35 +1,104 @@
+from copy import deepcopy
+import math
+
 class DiffractionException(Exception):
-	pass
+    pass
 
 class Diffraction:
-	""" Calalcultes the diffraction pattern of an object in a given distance: xz is the plane with the object and the wave propagetes in positive y direction"""
-	
-	__slot__ = []
+    """ Calalcultes the diffraction pattern of an object in a given distance: xz is the plane with the object and the wave propagetes in positive y direction"""
 
-	def __init__(self,dist):
-		self.__dist = self.setDist(dist)
+    def __init__(self,dist):
+        self.__dist = self.setDist(dist)
 
-	def setDist(self,dist):
-		if dist <= 0:
-			raise DiffractionException("Distance between object and image plain needs to be greater 0")	
-		else:
-			self.__dist = dist
+    def setDist(self,dist):
+        if dist <= 0:
+            raise DiffractionException("Distance between object and image plain needs to be greater 0")	
+        else:
+            self.__dist = dist
 	
 
-	def input_object(self,centerx,centerz,shape):
-		self.__obj_xc = centerx
-		self.__obj_zc = centerz
-		self.__obj_shape = shape	# 1 coord: array of array as x coord, 2 coord: array of int as z coord
+    def set_object_plain(self,shape):
+        """ The center of the amplitude shape is aligned to major optical axis """
+        self.__obj = shape	# 1 coord: array of array as x coord, 2 coord: array of int as z coord
 		
-		# Check if they fit
-		if not(centerx in range(len(shape))):
-			raise DiffractionException("Center of the object in x direction is outside the shape of the object")
+        # Check for number of columns
+        if (len(shape) - 1) % 2 != 0:
+            raise DiffractionException("Input object must have an odd number of columns")
+
+        # Check for shape being an rectangle
+        zlength = -1
+        for s in shape:
+            if zlength > 0 and z != len(s):
+                raise DiffractionException("zlength differ in shape object")
+            else:
+                zlength = len(s)
+
+        if (zlength -1) % 2 != 0:
+            raise DiffractionException("Input object must have an odd number of rows")
+
+        self.__obj_xs = len(shape)
+        self.__obj_zs = len(shape[0])
+
+        
+    def set_image_plain(self,x_border, z_border):
+        """ xsize and ysize will be semetrically separated around the main optical axis """
+        if x_border <= 0 or z_border <= 0:
+            raise DiffractionException("Image Plain to small")
 		
-		# Check if for each x the numbers of z are equal
-		zlength = -1
-		for s in shape:
-			if zlength > 0 and z != len(s):
-				raise DiffractionException("zlength differ in shape object")
-			else:
-				zlength = len(s)
-		
+        # Create template column
+        tmp = []
+        for i in range(z_border*2 + 1):
+            tmp.append(0 + 0 *1j)
+
+        self.__img = []
+        # Create the rows with template column deep copies
+        for i in range(x_border*2 + 1):
+            self.__img.append(deepcopy(tmp))
+
+        # memorize the size of the image plane
+        self.__img_xs = 2*x_border + 1
+        self.__img_zs = 2*z_border + 1
+
+
+    def __wave(self,fromx,fromz,tox,toz,k,addphase): # positions relative to the centers
+        """ calculates the complex amplitude at a given position from a source """
+        # Distances
+        rx = tox - fromx
+        ry = dist
+        rz = toz - fromz
+
+        # Check properties of k
+        if len(k) != 3:
+            raise DiffractionException("Wave vector has 3 dimensions")
+
+        # Calculate the indices
+        x_obj_ind = (self.__obj_xs - 1) / 2 + fromx 
+        z_obj_ind = (self.__obj_zs - 1) / 2 + fromz
+    
+        # Calculate intermediates
+        phase = k[0]*rx + k[1]*ry + k[2]*rz + addphase     # left out wt
+        eukl_dist = math.sqrt(rx**2 + ry**2 + rz**2)
+
+        return (math.cos(phase) + math.sin(phase)*1j) * self.__obj[x_obj_ind][z_obj_ind]/eukl_dist
+            
+
+    def diffract(self):
+        obj_x = list(range(-((self.__obj_xs - 1) / 2), ((self.__obj_xs - 1) / 2) + 1))       
+        obj_z = list(range(-((self.__obj_zs - 1) / 2), ((self.__obj_zs - 1) / 2) + 1))       
+        img_x = list(range(-((self.__img_xs - 1) / 2), ((self.__img_xs - 1) / 2) + 1))       
+        img_x = list(range(-((self.__img_zs - 1) / 2), ((self.__img_zs - 1) / 2) + 1)) 
+
+        for i in img_x:
+            for j in img_z:
+                for k in obj_x:
+                    for l in obj_z:
+                        self.__img[((self.__img_xs - 1) / 2) + i][((self.__img_zs - 1) / 2) + j] += self.__wave(k,l,i,j,[1,1,1],0)   
+
+        return self.__img
+    
+         
+# isotrope
+#A/r * exp(i(w*t - ky*ry))
+#r = R - y * sin(theta) + (y*y/2R)*cos(theta)*cos(theta)
+
+	
