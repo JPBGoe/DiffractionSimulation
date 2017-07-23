@@ -95,10 +95,3 @@ class Diffraction:
                         self.__img[((self.__img_xs - 1) / 2) + i][((self.__img_zs - 1) / 2) + j] += self.__wave(k,l,i,j,[1,1,1],0)   
 
         return self.__img
-    
-         
-# isotrope
-#A/r * exp(i(w*t - ky*ry))
-#r = R - y * sin(theta) + (y*y/2R)*cos(theta)*cos(theta)
-
-	
