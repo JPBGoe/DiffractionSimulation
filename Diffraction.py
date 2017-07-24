@@ -17,7 +17,7 @@ class Diffraction:
             self.__dist = dist
 	
 
-    def set_object_plain(self,shape):
+    def __set_object_plain(self,shape):
         """ The center of the amplitude shape is aligned to major optical axis """
         self.__obj = shape	# 1 coord: array of array as x coord, 2 coord: array of int as z coord
 		
@@ -59,30 +59,35 @@ class Diffraction:
         self.__img_xs = 2*x_border + 1
         self.__img_zs = 2*z_border + 1
 
+    def __set_wavevec(self,k):
+        # Check properties of k
+        if len(k) != 3:
+            raise DiffractionException("Wave vector has 3 dimensions")       
 
-    def __wave(self,fromx,fromz,tox,toz,k,addphase): # positions relative to the centers
+        self.k = k
+
+    def __set_addphase(self,addphase):
+        self.addphase = addphase
+
+    def __wave(self,fromx,fromz,tox,toz): # positions relative to the centers
         """ calculates the complex amplitude at a given position from a source """
         # Distances
         rx = tox - fromx
         ry = dist
         rz = toz - fromz
 
-        # Check properties of k
-        if len(k) != 3:
-            raise DiffractionException("Wave vector has 3 dimensions")
-
         # Calculate the indices
         x_obj_ind = (self.__obj_xs - 1) / 2 + fromx 
         z_obj_ind = (self.__obj_zs - 1) / 2 + fromz
     
         # Calculate intermediates
-        phase = k[0]*rx + k[1]*ry + k[2]*rz + addphase     # left out wt
-        eukl_dist = math.sqrt(rx**2 + ry**2 + rz**2)
-
+        path_length =  self.k[0]*rx + self.k[1]*ry + self.k[2]*rz 
+        phase = path_length + self.addphase[x_obj_ind][z_obj_ind]     # left out wt
+        
         return (math.cos(phase) + math.sin(phase)*1j) * self.__obj[x_obj_ind][z_obj_ind]/eukl_dist
             
 
-    def diffract(self):
+    def __diffract(self):
         obj_x = list(range(-((self.__obj_xs - 1) / 2), ((self.__obj_xs - 1) / 2) + 1))       
         obj_z = list(range(-((self.__obj_zs - 1) / 2), ((self.__obj_zs - 1) / 2) + 1))       
         img_x = list(range(-((self.__img_xs - 1) / 2), ((self.__img_xs - 1) / 2) + 1))       
@@ -92,6 +97,14 @@ class Diffraction:
             for j in img_z:
                 for k in obj_x:
                     for l in obj_z:
-                        self.__img[((self.__img_xs - 1) / 2) + i][((self.__img_zs - 1) / 2) + j] += self.__wave(k,l,i,j,[1,1,1],0)   
+                        self.__img[((self.__img_xs - 1) / 2) + i][((self.__img_zs - 1) / 2) + j] += self.__wave(k,l,i,j)   
 
         return self.__img
+
+    def calculate_pattern(self,obj,img_x_b,img_z_b,wavevec,init_phase):
+        self.__set_object_plain(obj)
+        self.__set_image_plain(img_x_b,img_z_b)
+        self.__set_wavevec(wavevec)
+        self.__set_addphase(init_phase)
+
+        return self.__diffract()
