@@ -14,7 +14,7 @@ class Diffraction:
         if dist <= 0:
             raise DiffractionException("Distance between object and image plain needs to be greater 0")	
         else:
-            self.__dist = dist
+            self.dist = dist
 	
 
     def __set_object_plain(self,shape):
@@ -28,7 +28,7 @@ class Diffraction:
         # Check for shape being an rectangle
         zlength = -1
         for s in shape:
-            if zlength > 0 and z != len(s):
+            if zlength > 0 and zlength != len(s):
                 raise DiffractionException("zlength differ in shape object")
             else:
                 zlength = len(s)
@@ -63,7 +63,7 @@ class Diffraction:
         # Check properties of k
         if len(k) != 3:
             raise DiffractionException("Wave vector has 3 dimensions")       
-
+        
         self.k = k
 
     def __set_addphase(self,addphase):
@@ -72,39 +72,45 @@ class Diffraction:
     def __wave(self,fromx,fromz,tox,toz): # positions relative to the centers
         """ calculates the complex amplitude at a given position from a source """
         # Distances
-        rx = tox - fromx
-        ry = dist
-        rz = toz - fromz
+        r = [tox - fromx, self.dist,toz - fromz]
 
         # Calculate the indices
-        x_obj_ind = (self.__obj_xs - 1) / 2 + fromx 
-        z_obj_ind = (self.__obj_zs - 1) / 2 + fromz
+        x_obj_ind = int((self.__obj_xs - 1) / 2 + fromx )
+        z_obj_ind = int((self.__obj_zs - 1) / 2 + fromz)
     
         # Calculate intermediates
-        path_length =  self.k[0]*rx + self.k[1]*ry + self.k[2]*rz 
-        phase = path_length + self.addphase[x_obj_ind][z_obj_ind]     # left out wt
+        path_length =  0
+        for s in list(range(3)):
+            path_length += (self.k[s]*r[s])
+            print(str(path_length))
+        phase = (path_length + self.addphase[x_obj_ind][z_obj_ind]) % (2*math.pi)     # left out wt
         
-        return (math.cos(phase) + math.sin(phase)*1j) * self.__obj[x_obj_ind][z_obj_ind]/eukl_dist
+        return (math.cos(phase) + math.sin(phase)*1j) * self.__obj[x_obj_ind][z_obj_ind]/path_length
             
 
     def __diffract(self):
-        obj_x = list(range(-((self.__obj_xs - 1) / 2), ((self.__obj_xs - 1) / 2) + 1))       
-        obj_z = list(range(-((self.__obj_zs - 1) / 2), ((self.__obj_zs - 1) / 2) + 1))       
-        img_x = list(range(-((self.__img_xs - 1) / 2), ((self.__img_xs - 1) / 2) + 1))       
-        img_x = list(range(-((self.__img_zs - 1) / 2), ((self.__img_zs - 1) / 2) + 1)) 
+        obj_x = list(range(-((self.__obj_xs - 1) // 2), ((self.__obj_xs - 1) // 2) + 1))       
+        obj_z = list(range(-((self.__obj_zs - 1) // 2), ((self.__obj_zs - 1) // 2) + 1))       
+        img_x = list(range(-((self.__img_xs - 1) // 2), ((self.__img_xs - 1) // 2) + 1))       
+        img_z = list(range(-((self.__img_zs - 1) // 2), ((self.__img_zs - 1) // 2) + 1)) 
 
         for i in img_x:
             for j in img_z:
                 for k in obj_x:
                     for l in obj_z:
-                        self.__img[((self.__img_xs - 1) / 2) + i][((self.__img_zs - 1) / 2) + j] += self.__wave(k,l,i,j)   
-
+                        self.__img[int(((self.__img_xs - 1) / 2) + i)][int(((self.__img_zs - 1) / 2) + j)] += self.__wave(k,l,i,j)   
+        print("Calculation finished")
         return self.__img
 
     def calculate_pattern(self,obj,img_x_b,img_z_b,wavevec,init_phase):
+        print("Starting")
         self.__set_object_plain(obj)
-        self.__set_image_plain(img_x_b,img_z_b)
+        print("Object set")
+        self.set_image_plain(img_x_b,img_z_b)
+        print("Image set")
         self.__set_wavevec(wavevec)
+        print("Wavevec set")
         self.__set_addphase(init_phase)
+        print("Init completed")
 
         return self.__diffract()
