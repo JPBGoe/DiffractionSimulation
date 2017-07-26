@@ -1,116 +1,106 @@
-from copy import deepcopy
 import math
+from copy import deepcopy
+import numpy as np
+import matplotlib.pyplot as plt
 
-class DiffractionException(Exception):
+class DiffException(Exception):
     pass
 
+
 class Diffraction:
-    """ Calalcultes the diffraction pattern of an object in a given distance: xz is the plane with the object and the wave propagetes in positive y direction"""
+    __dist = 0
+    __amp_0 = []
+    __phase_0 = []
+    __res = []
+    __wavevec = 0
 
-    def __init__(self,dist):
-        self.__dist = self.setDist(dist)
-
-    def setDist(self,dist):
-        if dist <= 0:
-            raise DiffractionException("Distance between object and image plain needs to be greater 0")	
-        else:
-            self.dist = dist
-	
-
-    def __set_object_plain(self,shape):
-        """ The center of the amplitude shape is aligned to major optical axis """
-        self.__obj = shape	# 1 coord: array of array as x coord, 2 coord: array of int as z coord
-		
-        # Check for number of columns
-        if (len(shape) - 1) % 2 != 0:
-            raise DiffractionException("Input object must have an odd number of columns")
-
-        # Check for shape being an rectangle
-        zlength = -1
-        for s in shape:
-            if zlength > 0 and zlength != len(s):
-                raise DiffractionException("zlength differ in shape object")
-            else:
-                zlength = len(s)
-
-        if (zlength -1) % 2 != 0:
-            raise DiffractionException("Input object must have an odd number of rows")
-
-        self.__obj_xs = len(shape)
-        self.__obj_zs = len(shape[0])
-
-        
-    def set_image_plain(self,x_border, z_border):
-        """ xsize and ysize will be semetrically separated around the main optical axis """
-        if x_border <= 0 or z_border <= 0:
-            raise DiffractionException("Image Plain to small")
-		
-        # Create template column
-        tmp = []
-        for i in range(z_border*2 + 1):
-            tmp.append(0 + 0 *1j)
-
-        self.__img = []
-        # Create the rows with template column deep copies
-        for i in range(x_border*2 + 1):
-            self.__img.append(deepcopy(tmp))
-
-        # memorize the size of the image plane
-        self.__img_xs = 2*x_border + 1
-        self.__img_zs = 2*z_border + 1
-
-    def __set_wavevec(self,k):
-        # Check properties of k
-        if len(k) != 3:
-            raise DiffractionException("Wave vector has 3 dimensions")       
-        
-        self.k = k
-
-    def __set_addphase(self,addphase):
-        self.addphase = addphase
-
-    def __wave(self,fromx,fromz,tox,toz): # positions relative to the centers
-        """ calculates the complex amplitude at a given position from a source """
-        # Distances
-        r = [tox - fromx, self.dist,toz - fromz]
-
-        # Calculate the indices
-        x_obj_ind = int((self.__obj_xs - 1) / 2 + fromx )
-        z_obj_ind = int((self.__obj_zs - 1) / 2 + fromz)
     
-        # Calculate intermediates
-        path_length =  0
-        for s in list(range(3)):
-            path_length += (self.k[s]*r[s])
-            print(str(path_length))
-        phase = (path_length + self.addphase[x_obj_ind][z_obj_ind]) % (2*math.pi)     # left out wt
+    def __init__(self,dist):
+        self.__dist = dist              # image and object plane distance
+
+    
+    def __wave(self,ori,dest):          # relative to the major optical axis in the center of __amp_0
+        ori = ori                       # x component, z component
+        dest = dest                     # x component, z component
+
+        # calculate the distances
+        r = [(dest[0]-ori[0]),self.__dist,(dest[1]-ori[1])]
+        R = math.sqrt(r[0]**2 + r[1]**2 + r[2]**2)
+        #print(str(r[0]) + " " + str(r[1]) + " "  + str(r[2]) + " " + str(R))
+
+        # correct for relative position
+        ori[0] = ori[0] + len(self.__amp_0) // 2        # x coordinate
+        ori[1] = ori[1] + len(self.__amp_0[0]) // 2     # z coordinate
+        dest[0] = dest[0] + len(self.__res) // 2        # x coordinate
+        dest[1] = dest[1] + len(self.__res[0]) // 2     # z coordinate
+        if not (0 <= ori[0] and ori[0] < len(self.__amp_0)):
+            print("ori[0]=" + str(ori[0]))
+        if not (0 <= ori[1] and ori[1] < len(self.__amp_0[0])):
+            print("ori[0]=" + str(ori[1]))
+
+        # calculate the phase for a homogenious propagation
+        phase = self.__wavevec * R + self.__phase_0[ori[0]][ori[1]] # - w*t
+        phase = (phase % (2*math.pi))
+
+        # Calculate the complex amplitude at the destination
+        return (math.cos(phase) + 1j* math.sin(phase))*self.__amp_0[ori[0]][ori[1]]
+    
+
+    def calculate(self,amp_0,phase_0,img_size,wavevec):
+        self.__amp_0 = amp_0
+        self.__phase_0 = phase_0
+        self.__wavevec = wavevec
+
+        # init of the image plain
+        tmp = []
+        for i in range(img_size[0]):
+            tmp.append(0 + 1j*0)
+
+        for j in range(img_size[1]):
+            self.__res.append(deepcopy(tmp))
+
+        # calculate
+        for i in list(range(len(self.__res))):
+            for j in list(range(len(self.__res[0]))):
+                for k in list(range(len(self.__amp_0))):
+                    for l in list(range(len(self.__amp_0[0]))):
+                        rel_i = i - len(self.__res) // 2
+                        rel_j = j - len(self.__res[0]) // 2
+                        rel_k = k - len(self.__amp_0) // 2
+                        rel_l = l - len(self.__amp_0[0]) // 2
+                        self.__res[i][j] += self.__wave([rel_k,rel_l],[rel_i,rel_j])
+      
+
+        return self.__res        
         
-        return (math.cos(phase) + math.sin(phase)*1j) * self.__obj[x_obj_ind][z_obj_ind]/path_length
-            
+        
+        
+# Testing
 
-    def __diffract(self):
-        obj_x = list(range(-((self.__obj_xs - 1) // 2), ((self.__obj_xs - 1) // 2) + 1))       
-        obj_z = list(range(-((self.__obj_zs - 1) // 2), ((self.__obj_zs - 1) // 2) + 1))       
-        img_x = list(range(-((self.__img_xs - 1) // 2), ((self.__img_xs - 1) // 2) + 1))       
-        img_z = list(range(-((self.__img_zs - 1) // 2), ((self.__img_zs - 1) // 2) + 1)) 
+osi = [21,21]
+fsi = [40,40]
+tmp = []
+for i in list(range(osi[1])):
+    tmp.append(1.0)
 
-        for i in img_x:
-            for j in img_z:
-                for k in obj_x:
-                    for l in obj_z:
-                        self.__img[int(((self.__img_xs - 1) / 2) + i)][int(((self.__img_zs - 1) / 2) + j)] += self.__wave(k,l,i,j)   
-        print("Calculation finished")
-        return self.__img
+ph = []
+amp = []
+for j in list(range(osi[0])):
+    ph.append(deepcopy(tmp))
+    amp.append(deepcopy(tmp))
 
-    def calculate_pattern(self,obj,img_x_b,img_z_b,wavevec,init_phase):
-        print("Starting")
-        self.__set_object_plain(obj)
-        print("Object set")
-        self.set_image_plain(img_x_b,img_z_b)
-        print("Image set")
-        self.__set_wavevec(wavevec)
-        print("Wavevec set")
-        self.__set_addphase(init_phase)
-        print("Init completed")
 
-        return self.__diffract()
+ft = np.fft.fft2(amp)
+plt.figure(0)
+plt.imshow(np.abs(ft))
+plt.colorbar()
+
+test = Diffraction(10000)
+result = test.calculate(amp,ph,fsi,2*math.pi*10**9/600)
+
+
+plt.figure(1)
+plt.imshow(np.abs(result))
+plt.colorbar()
+plt.show()
+
