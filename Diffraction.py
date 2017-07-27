@@ -3,159 +3,115 @@ from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
 
-# the cartesian cross is centered in the input image
-
 
 class Diffraction:
-    dist = 0
-    start_amp = []
-    start_phase = []
-    start_pos = []
+    ini_amp = []
     fin_amp = []
-    fin_phase = []
-    fin_pos = []
-    wavevec = 1 
+    pix_ini = (0.001,0.001)     # dx,dy
+    pix_fin = (0.001,0.001)     # dx,dy
+    wavevec = 0
 
 
     res = []
 
-    def set_input(self,ini_amp,ini_pos):
-        self.start_amp = np.abs(ini_amp)
-        self.start_phase = np.angle(ini_amp)
-        self.start_pos = ini_pos
+    def set_pixel(self,pix_ini=(0.001,0.001),pix_fin=(0.001,0.001)):
+        self.pix_ini = pix_ini
+        self.pix_fin = pix_fin 
 
-    def set_output(self,fin_pos):
-        self.fin_pos = fin_pos
+    def sphere_wave(self,origin,at,ini_amp):    #origin =(x,y,z), at =(x,y,z) with respect to the major axis in kartesian coordinates, ini_amp complex amplitude at the origin
+        if np.abs(ini_amp) == 0.0:
+            return 0 + 0j
 
-    def set_dist(self, dist):
-        self.dist = dist
-
-    def sphere_wave(self,origin,at):    #origin =(x_ind,z_ind) with respect to the image origin not the center
-        # calculate the distance
-        distance = math.sqrt((fin_pos[at[0]]-start_pos[origin[0]])**2 + dist**2 + (fin_pos[at[1]]-start_pos[origin[1]])**2)
-        
-        # calculate the object origin
-        obj_ori = (len(start_amp) // 2,len(start_amp[0]) // 2)
+        # distancevetor
+        r = ((at[0]-origin[0]),(at[1]-origin[1]))
+        dist = (r[0]**2 + self.dist**2 + r[1]**2)**(0.5)
 
         # phase
-        phase = ( (wavevec * distance) % (math.pi*2) ) + startphase[origin(0) + obj_ori(0)][origin(1)+obj_ori(1)]
-        phase = ( phase % (math.pi*2))
-
-        # final amplitude at the place "at"
-        return (math.cos(phase) + 1j*math.sin(phase)) * start_amp[origin(0) + obj_ori(0)][origin(1)+obj_ori(1)]
-
-
+        phase = np.angle(ini_amp) - (self.wavevec*dist % (2*math.pi)) # +wt 
         
+        # output a complex number at "at" as the diffraction part of the wave starting in origin with complex ini_amp 
+        return (math.cos(phase) + 1j*math.sin(phase)) * np.abs(ini_amp)/dist
 
-
-    
-    def wave(self,ori,dest):          # relative to the major optical axis in the center of __amp_0
-        if self.amp_0[ori[0]][ori[1]] == 0.0:
-            return 0
-
-        # calculate the distances
-        r = [(dest[0]-ori[0]),self.dist,(dest[1]-ori[1])]
-        R = math.sqrt(r[0]**2 + r[1]**2 + r[2]**2)
-
-        # correct for relative position
-        ori[0] = ori[0] + len(self.amp_0) // 2        # x coordinate
-        ori[1] = ori[1] + len(self.amp_0[0]) // 2     # z coordinate
-        dest[0] = dest[0] + len(self.res) // 2        # x coordinate
-        dest[1] = dest[1] + len(self.res[0]) // 2     # z coordinate
-        if not (0 <= ori[0] and ori[0] < len(self.amp_0)):
-            print("ori[0]=" + str(ori[0]))
-        if not (0 <= ori[1] and ori[1] < len(self.amp_0[0])):
-            print("ori[0]=" + str(ori[1]))
-
-        # calculate the phase for a homogenious propagation
-        phase = self.wavevec * R + self.phase_0[ori[0]][ori[1]] # - w*t
-        phase = (phase % (2*math.pi))
-
-        # Calculate the complex amplitude at the destination
-        return (math.cos(phase) + 1j* math.sin(phase))*self.amp_0[ori[0]][ori[1]]/R
-    
-
-    def calculate(self,amp_0,phase_0,img_size,wavevec):
-        self.amp_0 = amp_0
-        self.phase_0 = phase_0
+    def calculate(self,ini_amp,dist,wavevec,fin_amp):
+        self.ini_amp = ini_amp
+        self.fin_amp = fin_amp
         self.wavevec = wavevec
+        self.dist = dist
 
-        # init of the image plain
-        tmp = []
-        for i in range(img_size[0]):
-            tmp.append(0 + 1j*0)
+        # Create array with positions for the first array: Object in first quadrant from botom to top
+        ini_pos = np.zeros((len(ini_amp),len(ini_amp[0])), dtype=(float,2))
+        xpos = (-len(ini_amp)*self.pix_ini[0] + self.pix_ini[0])/2
+        for i in list(range(len(ini_amp))):
+            ypos = (-len(ini_amp[1])*self.pix_ini[1] + self.pix_ini[1])/2
+            for j in list(range(len(ini_amp[0]))):
+                ini_pos[i][j] = (xpos,ypos)
+                ypos += self.pix_ini[1]
+            xpos += self.pix_ini[0]
 
-        for j in range(img_size[1]):
-            self.res.append(deepcopy(tmp))
+        # Create positions of the second array
+        fin_pos = np.zeros((len(fin_amp),len(fin_amp[0])), dtype=(float,2))
+        xpos = (-len(fin_amp)*self.pix_fin[0] + self.pix_fin[0])/2
+        for i in list(range(len(fin_amp))):
+            ypos = (-len(fin_amp[1])*self.pix_fin[1] + self.pix_fin[1])/2
+            for j in list(range(len(fin_amp[0]))):
+                fin_pos[i][j] = (xpos,ypos)
+                ypos += self.pix_fin[1]
+            xpos += self.pix_fin[0]
 
-        # calculate
-        for i in list(range(len(self.res))):
-            for j in list(range(len(self.res[0]))):
-                for k in list(range(len(self.amp_0))):
-                    for l in list(range(len(self.amp_0[0]))):
-                        rel_i = i - len(self.res) // 2
-                        rel_j = j - len(self.res[0]) // 2
-                        rel_k = k - len(self.amp_0) // 2
-                        rel_l = l - len(self.amp_0[0]) // 2
-                        self.res[i][j] += self.wave([rel_k,rel_l],[rel_i,rel_j])
-        return self.res        
         
-        
-    
+        # Calculate the distance
+        print("Start",end="\r")
+        for i in list(range(len(fin_amp))):
+            print(str(100*i/len(fin_amp)) + " % finished",end="\r")
+            for j in list(range(len(fin_amp[0]))):
+                for k in list(range(len(ini_amp))):
+                    for l in list(range(len(ini_amp[0]))):
+                        self.fin_amp[i][j] += self.sphere_wave(ini_pos[k][l],fin_pos[i][j],ini_amp[k][l])
+        print("                   ",end="\r")
+        print("Done")
+
+
+    def get_intensity(self):
+        return np.abs(self.fin_amp)
+
+    def get_phase(self):
+        return np.angle(self.fin_amp)
 
 
 
+# Create the diffraction object
+obj_size = (50,50)
+obj = np.zeros(obj_size,dtype=np.complex_)
+for i in list(range(0,obj_size[0])):
+    for j in list(range(0,obj_size[1])):
+        obj[i][j] = 1000 + 1j*0
 
-
-
-
-
-
-
-
-
-
-    
-# Testing
-
-osi = [30,30]
-fsi = [100,100]
-tmp = []
-for i in list(range(osi[1])):
-    tmp.append(0.0)
-
-ph = []
-amp = []
-for j in list(range(osi[0])):
-    ph.append(deepcopy(tmp))
-    amp.append(deepcopy(tmp))
-
-for i in list(range(osi[0])):
-    for j in list(range(osi[1])):
-        if (i-osi[0]//2)**2 + (j-osi[1]//2)**2 <= 5**2:
-            amp[i][j] = 1.0
-
-#print(amp)
-
-
+# plot the diffraction object
 plt.figure(1)
-plt.imshow(amp)
+plt.imshow(np.abs(obj))
 plt.colorbar()
+plt.show()
 
+# Parameters
+wv = 2*math.pi*10**9/600        # [wv] = 1/m
+dist = 0.5                     # [dist] = m
 
-ft = np.fft.fft2(amp)
-#print(len(ft))
+# Create the the image plane
+img_size = (100,100)
+img = np.zeros(img_size,dtype=np.complex_)
+
+# Do the calculation
+diff = Diffraction()
+diff.set_pixel(pix_ini=(10**(-6),10**(-6)))
+diff.calculate(obj,dist,wv,img)
+ 
+tmp = diff.get_intensity()
 plt.figure(2)
-plt.imshow(np.abs(ft))
+plt.imshow(tmp)
 plt.colorbar()
-
-test = Diffraction()
-test.set_dist(1000)
-result = test.calculate(amp,ph,fsi,2*math.pi*10**9/600)
-
+plt.show()
 
 plt.figure(3)
-plt.imshow(np.abs(result))
-plt.colorbar()
+plt.plot(tmp[img_size[0]//2])
 plt.show()
 
